@@ -1,4 +1,4 @@
-
+"""Streamlit dashboard for frozen 09:20 option money leaders."""
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -11,6 +11,45 @@ from psycopg.rows import dict_row
 IST=ZoneInfo("Asia/Kolkata"); DB=os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
 st.set_page_config(page_title="Option AVWAP",page_icon="📊",layout="wide")
 if not DB:st.error("NEON_DATABASE_URL is missing");st.stop()
+
+# Create empty tables when the dashboard is deployed before the collector.
+# CREATE TABLE IF NOT EXISTS is safe to run repeatedly and prevents a blank
+# database from crashing the dashboard.
+SCHEMA_DDL="""
+CREATE TABLE IF NOT EXISTS public.option_avwap_universe (
+ trading_date date NOT NULL, symbol text NOT NULL, option_key text NOT NULL,
+ trading_symbol text NOT NULL, option_type text NOT NULL, strike numeric NOT NULL,
+ expiry date NOT NULL, lot_size integer NOT NULL, selection_tag text NOT NULL,
+ baseline_volume bigint, volume_0920 bigint, volume_delta bigint,
+ baseline_oi bigint, oi_0920 bigint, oi_delta bigint, premium_0920 numeric,
+ traded_money_cr numeric, fresh_oi_money_cr numeric, selected_at timestamptz NOT NULL,
+ future_key text, PRIMARY KEY(trading_date,symbol,option_key)
+);
+CREATE TABLE IF NOT EXISTS public.option_avwap_3m (
+ trading_date date NOT NULL, symbol text NOT NULL, option_key text NOT NULL,
+ trading_symbol text NOT NULL, selection_tag text NOT NULL, option_type text NOT NULL,
+ strike numeric NOT NULL, expiry date NOT NULL, candle_start timestamptz NOT NULL,
+ candle_end timestamptz NOT NULL, open numeric, high numeric, low numeric, close numeric,
+ volume bigint, oi bigint, avwap_high numeric, avwap_low numeric,
+ hourly_avwap_high numeric, hourly_avwap_low numeric, high_cross text, low_cross text,
+ future_price numeric, updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(trading_date,option_key,candle_start)
+);
+CREATE TABLE IF NOT EXISTS public.option_avwap_heartbeat (
+ service_name text PRIMARY KEY, trading_date date, status text NOT NULL,
+ candidates integer DEFAULT 0, selected integer DEFAULT 0,
+ last_cycle_at timestamptz, message text,
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
+"""
+
+try:
+    with psycopg.connect(DB) as schema_connection:
+        schema_connection.execute(SCHEMA_DDL)
+        schema_connection.commit()
+except Exception as exc:
+    st.error(f"Unable to initialise the Option AVWAP tables: {exc}")
+    st.stop()
 
 @st.cache_data(ttl=30)
 def q(sql,params=()):
