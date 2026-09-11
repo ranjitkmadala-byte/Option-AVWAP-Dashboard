@@ -1,4 +1,4 @@
-"""Streamlit dashboard for frozen 09:20 option money leaders."""
+
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -20,7 +20,7 @@ def q(sql,params=()):
         d[col]=pd.to_datetime(d[col],utc=True,errors="coerce").dt.tz_convert(IST)
     return d
 
-daydf=q("SELECT max(trading_date) day FROM public.option_avwap_universe")
+daydf=q("SELECT max(trading_date) AS latest_trading_date FROM public.option_avwap_universe")
 if daydf.empty or pd.isna(daydf.iloc[0,0]):st.info("No 09:20 option selection is available yet.");st.stop()
 day=daydf.iloc[0,0]
 universe=q("SELECT * FROM public.option_avwap_universe WHERE trading_date=%s ORDER BY symbol,selection_tag",(day,))
